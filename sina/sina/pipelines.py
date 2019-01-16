@@ -22,13 +22,17 @@ class SinaPipeline(object):
         if 'name' in item.keys():
             sql = "REPLACE INTO sina_user(uid, name, profile_image_url, followers_count, follow_count, profile_url, description, verified, gender, urank,verified_type,verified_reason) values ('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')" % (
                 item['uid'], pymysql.escape_string(item['name']), item['profile_image_url'], item['followers_count'], item['follow_count'], item['profile_url'],
-                pymysql.escape_string(item['description']), item['verified'], item['gender'], item['urank'], item['verified_type'], item['verified_reason'])
+                pymysql.escape_string(item['description']), item['verified'], item['gender'], item['urank'], item['verified_type'], pymysql.escape_string(item['verified_reason']))
         else:
             sql = "INSERT INTO sina_weibo( uid, text, scheme, created_at, attitudes_count, comments_count, pictures) VALUES ('%s','%s','%s','%s','%s','%s','%s');" % (
                 item['uid'], pymysql.escape_string(item['text']), item['scheme'], item['created_at'], item['attitudes_count'], item['comments_count'],
                 json.dumps(item['pictures']),
             )
-        cursor.execute(sql)
+        try:
+            cursor.execute(sql)
+        except BaseException as e:
+            print(e.args)
+            print(sql)
         conn.commit()
         cursor.close()
         conn.close()

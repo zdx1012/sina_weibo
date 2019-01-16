@@ -12,46 +12,50 @@ from sina.items import personInfo, SinaItem
 class WeiboSpider(scrapy.Spider):
     name = 'weibo'
     allowed_domains = ['m.weibo.cn']
+    find_more_user = True  # 是否爬取其他的用户信息以及微博
 
     def start_requests(self):
-        weibo_id = [1195354434, ]
+        weibo_id = [2656274875, 5187664653, 1223178222, 1291477752, 1784473157, 1227368500]
         for wid in weibo_id:
-            print('https://m.weibo.cn/api/container/getIndex?type=uid&value=' + str(wid))
+            # print('https://m.weibo.cn/api/container/getIndex?type=uid&value=' + str(wid))
             yield Request('https://m.weibo.cn/api/container/getIndex?type=uid&value=' + str(wid), callback=self.parse_userInfo, dont_filter=True,
                           meta={'uid': str(wid)})
+            print('this is a test ')
 
     # 解析个人信息
     def parse_userInfo(self, response):
         data = response.text
         content = json.loads(data).get('data')
-        profile_image_url = content.get('userInfo').get('profile_image_url')
-        description = content.get('userInfo').get('description')
-        profile_url = content.get('userInfo').get('profile_url')
-        verified = content.get('userInfo').get('verified')
-        follow_count = content.get('userInfo').get('follow_count')
-        followers_count = content.get('userInfo').get('followers_count')
-        gender = content.get('userInfo').get('gender')
-        urank = content.get('userInfo').get('urank')
-        name = content.get('userInfo').get('screen_name')
-        verified_type = content.get('userInfo').get('verified_type')
-        verified_reason = content.get('userInfo').get('verified_reason')
-        uid = response.meta['uid']
-        # 保存用户
-        person = personInfo()
-        person["uid"] = uid
-        person["name"] = name
-        person["description"] = description
-        person["follow_count"] = follow_count
-        person["followers_count"] = followers_count
-        person["profile_image_url"] = profile_image_url
-        person["profile_url"] = profile_url
-        person["verified"] = verified
-        person["urank"] = urank
-        person["gender"] = gender
-        person["verified_type"] = verified_type
-        person["verified_reason"] = verified_reason
-        yield person
-        yield Request('https://m.weibo.cn/api/container/getIndex?type=uid&value=' + uid, callback=self.parse_containerid, meta=response.meta)
+        if content:
+            profile_image_url = content.get('userInfo').get('profile_image_url')
+            description = content.get('userInfo').get('description')
+            profile_url = content.get('userInfo').get('profile_url')
+            verified = content.get('userInfo').get('verified')
+            follow_count = content.get('userInfo').get('follow_count')
+            followers_count = content.get('userInfo').get('followers_count')
+            gender = content.get('userInfo').get('gender')
+            urank = content.get('userInfo').get('urank')
+            name = content.get('userInfo').get('screen_name')
+            verified_type = content.get('userInfo').get('verified_type')
+            verified_reason = content.get('userInfo').get('verified_reason')
+            uid = response.meta['uid']
+            # 保存用户
+            person = personInfo()
+            person["uid"] = uid
+            person["name"] = name
+            person["description"] = description
+            person["follow_count"] = follow_count
+            person["followers_count"] = followers_count
+            person["profile_image_url"] = profile_image_url
+            person["profile_url"] = profile_url
+            person["verified"] = verified
+            person["urank"] = urank
+            person["gender"] = gender
+            person["verified_type"] = verified_type
+            person["verified_reason"] = verified_reason if verified_reason is not None else ""
+            yield person
+            yield Request('https://m.weibo.cn/api/container/getIndex?type=uid&value=' + uid, callback=self.parse_containerid, meta=response.meta,
+                          dont_filter=False)
 
     # 解析containerid(获取微博需要该字段)
     def parse_containerid(self, response):
@@ -76,8 +80,8 @@ class WeiboSpider(scrapy.Spider):
         cards = content.get('cards')
 
         if (len(cards) > 0):
-            print("-----正在爬取第%s页-----" % str(response.meta['page']))
-
+            # print("-----正在爬取第%s页-----" % str(response.meta['page']))
+            tmp_time = ""
             for j in range(len(cards)):
                 card_type = cards[j].get('card_type')
                 # 微博
@@ -108,13 +112,15 @@ class WeiboSpider(scrapy.Spider):
                 #     sinaitem["reposts_count"] = reposts_count
                 #     sinaitem["pictures"] = pic_urls
                 #     yield sinaitem
+                #     tmp_time = created_at
                 # 关注信息
-                if card_type == 11:
+                if card_type == 11 and self.find_more_user:
                     # 获取他关注的人的地址
                     # https://m.weibo.cn/p/index?containerid=231051_-_followers_-_1195354434_-_1042015%3AtagCategory_050&luicode=10000011&lfid=1076031195354434 查看该网页的请求过程
-                    fllow_url = str(cards[j]['card_group'][0]['scheme']).replace('https://m.weibo.cn/p/index?', 'https://m.weibo.cn/api/container/getIndex?')
-                    print(fllow_url, '----')
-                    yield Request(url=fllow_url, callback=self.parse_fllow)
+
+                    fllow_base_url = str(cards[j]['card_group'][0]['scheme']).replace('https://m.weibo.cn/p/index?',
+                                                                                      'https://m.weibo.cn/api/container/getIndex?') + "&page="
+                    yield Request(url=fllow_base_url + str(1), callback=self.parse_fllow, meta={'page': 1, 'base_url': fllow_base_url})
             # 下一页链接
             # weibo_list_url = 'https://m.weibo.cn/api/container/getIndex?type=uid&value=' + uid + '&containerid=' + containerid + '&page=' + next_page
             # response.meta['page'] = next_page
@@ -125,15 +131,19 @@ class WeiboSpider(scrapy.Spider):
         data = response.text
         content = json.loads(data).get('data')
         cards = content.get('cards')
-        # if len(cards) > 0:
-        for card in cards:
-            if card.get('title') == '他的全部关注':
+        if len(cards) > 0:
+            for card in cards:
                 for tmp in card.get('card_group'):
-                    user = tmp.get('user')
                     # 获取关注的人的ID
-                    uid = user.get('id')
-                    yield Request('https://m.weibo.cn/api/container/getIndex?type=uid&value=' + str(uid), callback=self.parse_userInfo, dont_filter=True,
-                                  meta={'uid': str(uid)})
+                    if tmp['card_type'] == 10:
+                        user = tmp.get('user')
+                        uid = user.get('id')
+                        yield Request('https://m.weibo.cn/api/container/getIndex?type=uid&value=' + str(uid), callback=self.parse_userInfo, dont_filter=False,
+                                      meta={'uid': str(uid)})
+            # 爬取下一页关注的微博主
+            next_page = str(int(response.meta['page']) + 1)
+            next_url = response.meta['base_url'] + next_page
+            yield Request(url=next_url, callback=self.parse_fllow, meta={'page': next_page, 'base_url': response.meta['base_url']}, dont_filter=False)
 
     # 日期格式化
     def date_format(self, datestr):
