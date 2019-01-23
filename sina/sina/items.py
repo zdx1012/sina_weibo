@@ -7,7 +7,6 @@
 
 import scrapy
 
-
 class personInfo(scrapy.Item):
     uid = scrapy.Field()  # 用户ID
     name = scrapy.Field()  # 昵称

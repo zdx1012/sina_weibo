@@ -7,10 +7,10 @@
 import pymysql
 import json
 
-MYSQL_HOST = 'localhost'
+MYSQL_HOST = '192.168.1.111'
 MYSQL_PORT = 3306
-MYSQL_USER = 'root'
-MYSQL_PWD = 'root'
+MYSQL_USER = 'zdx'
+MYSQL_PWD = 'asdf1234'
 MYSQL_DB = 'weibo'
 
 
@@ -20,7 +20,7 @@ class SinaPipeline(object):
         cursor = conn.cursor()
         # 根据是否有name字段，来判断是'用户信息'还是'微博'
         if 'name' in item.keys():
-            sql = "REPLACE INTO sina_user(uid, name, profile_image_url, followers_count, follow_count, profile_url, description, verified, gender, urank,verified_type,verified_reason) values ('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')" % (
+            sql = "REPLACE INTO sina_user(uid, name, profile_image_url, followers_count, follow_count, profile_url, description, verified, gender, urank,verified_type,verified_reason,insert_time) values ('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s',now())" % (
                 item['uid'], pymysql.escape_string(item['name']), item['profile_image_url'], item['followers_count'], item['follow_count'], item['profile_url'],
                 pymysql.escape_string(item['description']), item['verified'], item['gender'], item['urank'], item['verified_type'], pymysql.escape_string(item['verified_reason']))
         else:

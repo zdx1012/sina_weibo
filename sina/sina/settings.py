@@ -53,7 +53,7 @@ ROBOTSTXT_OBEY = False
 # See https://doc.scrapy.org/en/latest/topics/downloader-middleware.html
 DOWNLOADER_MIDDLEWARES = {
     # 'sina.middlewares.SinaDownloaderMiddleware': 543,
-    'sina.middlewares.RandomProxy': 543,
+    'sina.middlewares.RandomProxy': 500,
 }
 
 # Enable or disable extensions
@@ -90,26 +90,19 @@ ITEM_PIPELINES = {
 # HTTPCACHE_STORAGE = 'scrapy.extensions.httpcache.FilesystemCacheStorage'
 # LOG_LEVEL = "INFO"
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.89 Safari/537.36'
-RETRY_ENABLED = True
-RETRY_TIMES = 1
-DOWNLOAD_TIMEOUT = 15
+RETRY_ENABLED = False
+# RETRY_TIMES = 2
+DOWNLOAD_TIMEOUT = 10
 # 控制下载速度
-# DOWNLOAD_DELAY = 2
-# RANDOMIZE_DOWNLOAD_DELAY = False
-# DOWNLOAD_DELAY = 60 / 20.0
-# CONCURRENT_REQUESTS_PER_IP = 20
+# DOWNLOAD_DELAY = 1
+CONCURRENT_REQUESTS = 100
+CONCURRENT_REQUESTS_PER_DOMAIN = 100
+CONCURRENT_REQUESTS_PER_IP = 100
+COOKIES_ENABLED = False
+DUPEFILTER_DEBUG = True
 
-
-CONCURRENT_REQUESTS = 32
-
-# 更换 调度器、去重组件，节省内存(pip3 install scrapy-redis-bloomfilter)
+SCHEDULER_PERSIST = True
 SCHEDULER = "scrapy_redis_bloomfilter.scheduler.Scheduler"
 DUPEFILTER_CLASS = "scrapy_redis_bloomfilter.dupefilter.RFPDupeFilter"
 BLOOMFILTER_HASH_NUMBER = 6
-# Bit 30-一亿级别
 BLOOMFILTER_BIT = 30
-
-REDIS_HOST = '127.0.0.1'
-REDIS_PORT = 6379
-SCHEDULER_DUPEFILTER_KEY = '%s:dupefilter' % BOT_NAME
-

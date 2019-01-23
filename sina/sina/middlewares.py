@@ -11,7 +11,14 @@ import time
 import redis
 from scrapy import signals
 from scrapy.downloadermiddlewares.retry import RetryMiddleware
+from scrapy.http import HtmlResponse
 from scrapy.utils.response import response_status_message
+from twisted.internet import defer
+from twisted.internet.error import TimeoutError, DNSLookupError, \
+    ConnectionRefusedError, ConnectionDone, ConnectError, \
+    ConnectionLost, TCPTimedOutError
+from twisted.web.client import ResponseFailed
+from scrapy.core.downloader.handlers.http11 import TunnelError
 
 
 class SinaSpiderMiddleware(object):
@@ -114,15 +121,21 @@ redis_obj = redis.Redis(host='127.0.0.1', port=6379, db=0, decode_responses=True
 
 def get_proxy():
     # return redis_obj.srandmember('ip_set', 1)[0]
-    return random.choice(redis_obj.hkeys(name="useful_proxy"))
+    keys = redis_obj.hkeys(name="useful_proxy")
+    if len(keys) > 0:
+        return random.choice(keys)
 
 
-def delete_proxy(cur_proxy):
+def delete_proxy(reason, cur_proxy):
     # redis_obj.srem('ip_set', str(cur_proxy).replace('http://', ''))
-    redis_obj.hdel("useful_proxy", cur_proxy)
+    redis_obj.hdel("useful_proxy", str(cur_proxy).replace('http://', ''))
 
 
 class RandomProxy(object):
+    ALL_EXCEPTIONS = (defer.TimeoutError, TimeoutError, DNSLookupError,
+                      ConnectionRefusedError, ConnectionDone, ConnectError,
+                      ConnectionLost, TCPTimedOutError, ResponseFailed,
+                      IOError, TunnelError)
 
     def process_request(self, request, spider):
         ip = get_proxy()
@@ -131,30 +144,35 @@ class RandomProxy(object):
 
     def process_response(self, request, response, spider):
         # 处理非正常的http返回码
-        cur_proxy = request.meta['proxy']
         # 如果状态码大于400，我们认为可能是被对方封掉了
         if response.status >= 400:
-            with open('a.txt', encoding='utf-8', mode='a') as f:
-                import datetime
-                f.write(str(datetime.datetime.now()) + "---" + response.url + "---" + str(cur_proxy))
-            # 删除IP代理
-            delete_proxy(cur_proxy)
-            # 将IP从当前的request对象中删除
-            del request.meta['proxy']
-            # 重新新安排该request调度下载
-            return request
+            try:
+                # 删除代理信息
+                cur_proxy = request.meta['proxy']
+                del request.meta['proxy']
+                delete_proxy(response.status, cur_proxy)
+            except KeyError as e:
+                # 导致keyError的原因 是 本地IP被封
+                time.sleep(60)
+
+            # 从新安排该request调度下载
+            retry_req = request.copy()
+            return retry_req
+
         return response
 
     def process_exception(self, request, exception, spider):
-        #  处理请求过程中发和异常的情况
-        # 通常是代理服务器本身挂掉了，或者网络原因
-        if "proxy" in dict(request.meta).keys():
-            cur_proxy = request.meta['proxy']
-            print('raise exption: %s when use %s' % (exception, cur_proxy))
-            # 删除IP代理
-            # redis_obj.srem('ip_set', str(cur_proxy).replace('http://', ''))
-            delete_proxy(cur_proxy)
-            # 将IP从当前的request对象中删除
-            del request.meta['proxy']
-        # 从新安排该request调度下载
-        return request
+        # 捕获几乎所有的异常
+        if isinstance(exception, self.ALL_EXCEPTIONS):
+            print('捕获异常：', exception, request.meta['proxy'])
+            try:
+                # 删除代理信息
+                cur_proxy = request.meta['proxy']
+                del request.meta['proxy']
+                delete_proxy(exception, cur_proxy)
+            except BaseException as e:
+                pass
+        else:
+            print('捕获异常：未知异常')
+        retry_req = request.copy()
+        return retry_req
